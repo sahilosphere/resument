@@ -5453,38 +5453,94 @@ function openPreviewPage() {
   }, 0);
 }
 
-function downloadResumePDF() {
+async function downloadResumePDF() {
   var btn = document.getElementById('btn-download-pdf');
-  if (btn) { btn.classList.add('loading'); btn.textContent = 'Generating\u2026'; }
+  var originalHTML = btn ? btn.innerHTML : '';
+  if (btn) { btn.classList.add('loading'); btn.textContent = 'Generating\u2026'; btn.disabled = true; }
 
   if (typeof html2pdf === 'undefined') {
     alert('PDF library not loaded. Please check your internet connection.');
-    if (btn) { btn.classList.remove('loading'); btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download PDF'; }
+    if (btn) { btn.classList.remove('loading'); btn.innerHTML = originalHTML; btn.disabled = false; }
     return;
   }
 
-  /* CHANGE 1 — A4-exact PDF config */
-  html2pdf().set({
-    margin: 0,
-    filename: 'resume.pdf',
-    image: { type: 'jpeg', quality: 1 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      letterRendering: true
-    },
-    jsPDF: {
-      unit: 'mm',
-      format: 'a4',
-      orientation: 'portrait'
-    },
-    pagebreak: { mode: 'avoid-all' }
-  }).from(document.getElementById('resume-preview')).save().then(function() {
-    if (btn) {
-      btn.classList.remove('loading');
-      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download PDF';
-    }
-  });
+  var resumeEl  = document.getElementById('resume-preview');
+  var wrapperEl = document.getElementById('resume-wrapper');
+  var isMobile  = window.innerWidth <= 768;
+
+  /* ── 1. Save existing inline styles ── */
+  var origTransform       = resumeEl.style.transform;
+  var origTransformOrigin = resumeEl.style.transformOrigin;
+  var origWidth           = resumeEl.style.width;
+  var origHeight          = resumeEl.style.height;
+  var origOverflow        = resumeEl.style.overflow;
+  var origPosition        = resumeEl.style.position;
+  var origTop             = resumeEl.style.top;
+  var origLeft            = resumeEl.style.left;
+  var origWrapHeight      = wrapperEl ? wrapperEl.style.height  : '';
+  var origWrapOverflow    = wrapperEl ? wrapperEl.style.overflow : '';
+
+  /* ── 2. Reset styles for clean A4 capture ── */
+  if (isMobile) {
+    /* Mobile: remove scale() transform that scaleResumeToFit() applied */
+    resumeEl.style.transform       = 'none';
+    resumeEl.style.transformOrigin = 'top left';
+    resumeEl.style.width           = '794px';
+    resumeEl.style.height          = '1122px';
+    resumeEl.style.overflow        = 'hidden';
+    resumeEl.style.position        = 'relative';
+    resumeEl.style.top             = 'auto';
+    resumeEl.style.left            = 'auto';
+    if (wrapperEl) { wrapperEl.style.height = 'auto'; wrapperEl.style.overflow = 'visible'; }
+  } else {
+    /* Desktop: clear any inline styles so CSS (width:210mm, height:297mm) takes effect */
+    resumeEl.style.transform       = '';
+    resumeEl.style.transformOrigin = '';
+    resumeEl.style.width           = '';
+    resumeEl.style.height          = '';
+    resumeEl.style.overflow        = '';
+    resumeEl.style.position        = '';
+    resumeEl.style.top             = '';
+    resumeEl.style.left            = '';
+  }
+
+  /* ── 3. Let browser repaint ── */
+  await new Promise(function(resolve) { setTimeout(resolve, 300); });
+
+  var userName = (document.getElementById('f-name') && document.getElementById('f-name').value.trim()) || 'resume';
+  var fileName = userName.replace(/\s+/g, '_') + '_resume.pdf';
+
+  /* ── 4. Capture dimensions after repaint ── */
+  var captureWin  = isMobile ? resumeEl.offsetWidth : window.innerWidth;
+  var captureW = resumeEl.offsetWidth;
+
+  try {
+    await html2pdf().set({
+      margin: 0,
+      filename: fileName,
+      image:       { type: 'jpeg', quality: 1 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true, scrollX: 0, scrollY: 0, width: captureW, windowWidth: captureWin },
+      jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:   { mode: 'avoid-all' }
+    }).from(resumeEl).save();
+
+  } catch (err) {
+    console.error('PDF generation failed:', err);
+    alert('PDF generation failed. Please try again.');
+  } finally {
+    /* ── 5. Restore original inline styles ── */
+    resumeEl.style.transform       = origTransform;
+    resumeEl.style.transformOrigin = origTransformOrigin;
+    resumeEl.style.width           = origWidth;
+    resumeEl.style.height          = origHeight;
+    resumeEl.style.overflow        = origOverflow;
+    resumeEl.style.position        = origPosition;
+    resumeEl.style.top             = origTop;
+    resumeEl.style.left            = origLeft;
+    if (wrapperEl) { wrapperEl.style.height = origWrapHeight; wrapperEl.style.overflow = origWrapOverflow; }
+
+    if (btn) { btn.classList.remove('loading'); btn.innerHTML = originalHTML; btn.disabled = false; }
+  }
 }
 
 /* ── MASTER ROUTER ── */
